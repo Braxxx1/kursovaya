@@ -1,0 +1,77 @@
+import requests
+import os
+import json
+
+class Vkloader():
+    def __init__(self, id_polz='155621897', col_photo=5, offset=0):
+        token = ''
+        self.params = {'owner_id': id_polz,
+                'album_id': 'profile',
+                'access_token': token,
+                'v': '5.131',
+                'extended': '1',
+                'photo_sizes': '1',
+                'count': col_photo,
+                'offset': offset
+                            }
+        self.photo_json = []
+        
+    def get_photo_spis(self):
+        request = requests.get('https://api.vk.com/method/photos.get', params=self.params)
+        data = request.json()
+        data = data['response']['items']
+        photo = {}
+        kol = 0
+        for i in data:
+            i['sizes'] = i['sizes'][-1]
+            self.photo_json.append({'file_name':f"{str(i['likes']['count'])}.jpg", 
+                                    'size':i['sizes']['type']})
+            if str(i['likes']['count']) not in photo.keys():
+                photo[str(i['likes']['count'])] = i['sizes']['url']
+            else:
+                photo[f"{str(i['likes']['count'])} _ {str(i['date'])}"] = i['sizes']['url']
+            kol += 1
+            print(f"Загруженно {kol} фото")
+            
+        return photo
+    
+    def load_photo(self):
+        photo = []
+        for name, url in self.get_photo_spis().items():
+            with open('vk/%s' % f'{name}.jpg', 'wb') as file:
+                img = requests.get(url)
+                file.write(img.content)
+                photo.append('vk/%s' % f'{name}.jpg')
+        with open("photos.json", "w") as file:
+            json.dump(self.photo_json, file, indent=4)
+        return photo
+
+
+class YaUploader:
+    def __init__(self, token: str):
+        self.token = token
+
+    def upload(self, file_path: str):
+        """Метод загружает файлы по списку file_list на яндекс диск"""
+        name = file_path.split('/')[-1]
+        upload_url = "https://cloud-api.yandex.net/v1/disk/resources/upload"
+        head = {"Content-Type": "application/json", "Authorization": f"OAuth {self.token}"}
+        params = {"path": f'neotology_photo_vk/{name}', 'overwrite':'true'}
+        response = requests.get(url=upload_url, headers=head, params=params)
+        hr = response.json().get("href")
+        response = requests.put(url=hr, data=open(file_path, 'rb'))        
+
+
+def main():
+    vk = Vkloader(id_polz=input("Введите id - "))
+    take_vk_photo = vk.load_photo()
+    token = ''
+    y = YaUploader(token)
+    for i in take_vk_photo:
+        y.upload(i)
+
+
+if __name__ == "__main__":
+    if not os.path.exists('vk'):
+        os.mkdir('vk')
+    main()
